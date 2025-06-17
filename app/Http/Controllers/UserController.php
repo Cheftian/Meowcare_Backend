@@ -51,7 +51,8 @@ class UserController extends Controller
             $file = $request->file('Foto_Profil');
             $filename = time() . '_' . Str::random(10) . '.' . $file->getClientOriginalExtension();
             $folder = 'profile';
-            $path = public_path("images/{$folder}");
+            
+            $path = app()->basePath('public/images/' . $folder);
 
             if (!file_exists($path)) {
                 mkdir($path, 0755, true);
@@ -73,20 +74,39 @@ class UserController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->only('Email', 'Password');
-        $token = auth('user')->attempt([
-            'Email' => $credentials['Email'],
-            'password' => $credentials['Password']
-        ]);
+        $email = $credentials['Email'];
 
-        if (!$token) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
+        if ($email === 'admin@admin.com') {
+            // Login sebagai admin
+            $token = auth('admin')->attempt([
+                'Email' => $email,
+                'password' => $credentials['Password']
+            ]);
+
+            if (!$token) {
+                return response()->json(['message' => 'Invalid admin credentials'], 401);
+            }
+
+            $admin = auth('admin')->user();
+            $token = JWTAuth::fromUser($admin, ['role' => 'admin']);
+
+            return response()->json(['token' => $token, 'admin' => $admin]);
+        } else {
+            // Login sebagai user biasa
+            $token = auth('user')->attempt([
+                'Email' => $email,
+                'password' => $credentials['Password']
+            ]);
+
+            if (!$token) {
+                return response()->json(['message' => 'Invalid user credentials'], 401);
+            }
+
+            $user = auth('user')->user();
+            $token = JWTAuth::fromUser($user, ['role' => 'user']);
+
+            return response()->json(['token' => $token, 'user' => $user]);
         }
-
-        $user = auth('user')->user();
-        $customClaims = ['role' => 'user'];
-        $token = JWTAuth::fromUser($user, $customClaims);
-
-        return response()->json(['token' => $token, 'user' => $user]);
     }
 
     public function logout(Request $request)
@@ -127,7 +147,7 @@ class UserController extends Controller
         if ($request->hasFile('Foto_Profil')) {
             $file = $request->file('Foto_Profil');
             $filename = uniqid() . '.' . $file->getClientOriginalExtension();
-            $path = public_path('images/profile');
+            $path = app()->basePath('public/images/profile');
 
             if (!file_exists($path)) {
                 mkdir($path, 0755, true);
